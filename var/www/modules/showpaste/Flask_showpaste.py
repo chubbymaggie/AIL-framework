@@ -7,10 +7,11 @@
 import redis
 import json
 import os
+import sys
 import flask
 from flask import Flask, render_template, jsonify, request, Blueprint, make_response, Response, send_from_directory, redirect, url_for
 
-from Role_Manager import login_admin, login_analyst, no_cache
+from Role_Manager import login_admin, login_analyst, login_read_only, no_cache
 from flask_login import login_required
 
 import difflib
@@ -18,6 +19,12 @@ import ssdeep
 
 import Paste
 import requests
+
+sys.path.append(os.path.join(os.environ['AIL_BIN'], 'packages/'))
+import Tag
+
+sys.path.append(os.path.join(os.environ['AIL_BIN'], 'lib/'))
+import Domain
 
 # ============ VARIABLES ============
 import Flask_config
@@ -83,7 +90,6 @@ def showpaste(content_range, requested_path):
     p_date_list = []
     p_hashtype_list = []
 
-
     for dup_list in p_duplicate_str_full_list:
         dup_list = dup_list[1:-1].replace('\'', '').replace(' ', '').split(',')
         if dup_list[0] == "tlsh":
@@ -136,6 +142,7 @@ def showpaste(content_range, requested_path):
     active_taxonomies = r_serv_tags.smembers('active_taxonomies')
 
     l_tags = r_serv_metadata.smembers('tag:'+requested_path)
+    tags_safe = Tag.is_tags_safe(l_tags)
 
     #active galaxies
     active_galaxies = r_serv_tags.smembers('active_galaxies')
@@ -209,6 +216,9 @@ def showpaste(content_range, requested_path):
     if 'infoleak:submission="crawler"' in l_tags:
         crawler_metadata['get_metadata'] = True
         crawler_metadata['domain'] = r_serv_metadata.hget('paste_metadata:'+requested_path, 'domain')
+        crawler_metadata['domain'] = crawler_metadata['domain'].rsplit(':', 1)[0]
+        if tags_safe:
+            tags_safe = Tag.is_tags_safe(Domain.get_domain_tags(crawler_metadata['domain']))
         crawler_metadata['paste_father'] = r_serv_metadata.hget('paste_metadata:'+requested_path, 'father')
         crawler_metadata['real_link'] = r_serv_metadata.hget('paste_metadata:'+requested_path,'real_link')
         crawler_metadata['screenshot'] = get_item_screenshot_path(requested_path)
@@ -242,7 +252,7 @@ def showpaste(content_range, requested_path):
         hive_url = hive_case_url.replace('id_here', hive_case)
 
     return render_template("show_saved_paste.html", date=p_date, bootstrap_label=bootstrap_label, active_taxonomies=active_taxonomies, active_galaxies=active_galaxies, list_tags=list_tags, source=p_source, encoding=p_encoding, language=p_language, size=p_size, mime=p_mime, lineinfo=p_lineinfo, content=p_content, initsize=len(p_content), duplicate_list = p_duplicate_list, simil_list = p_simil_list, hashtype_list = p_hashtype_list, date_list=p_date_list,
-                            crawler_metadata=crawler_metadata,
+                            crawler_metadata=crawler_metadata, tags_safe=tags_safe,
                             l_64=l_64, vt_enabled=vt_enabled, misp=misp, hive=hive, misp_eventid=misp_eventid, misp_url=misp_url, hive_caseid=hive_caseid, hive_url=hive_url)
 
 def get_item_basic_info(item):
@@ -351,9 +361,11 @@ def show_item_min(requested_path , content_range=0):
     if 'infoleak:submission="crawler"' in l_tags:
         crawler_metadata['get_metadata'] = True
         crawler_metadata['domain'] = r_serv_metadata.hget('paste_metadata:'+relative_path, 'domain')
+        crawler_metadata['domain'] = crawler_metadata['domain'].rsplit(':', 1)[0]
         crawler_metadata['paste_father'] = r_serv_metadata.hget('paste_metadata:'+relative_path, 'father')
         crawler_metadata['real_link'] = r_serv_metadata.hget('paste_metadata:'+relative_path,'real_link')
         crawler_metadata['screenshot'] = get_item_screenshot_path(relative_path)
+        #crawler_metadata['har_file'] = Item.get_item_har(relative_path)
     else:
         crawler_metadata['get_metadata'] = False
 
@@ -384,21 +396,21 @@ def show_item_min(requested_path , content_range=0):
 
 @showsavedpastes.route("/showsavedpaste/") #completely shows the paste in a new tab
 @login_required
-@login_analyst
+@login_read_only
 def showsavedpaste():
     requested_path = request.args.get('paste', '')
     return showpaste(0, requested_path)
 
 @showsavedpastes.route("/showsaveditem_min/") #completely shows the paste in a new tab
 @login_required
-@login_analyst
+@login_read_only
 def showsaveditem_min():
     requested_path = request.args.get('paste', '')
     return show_item_min(requested_path)
 
 @showsavedpastes.route("/showsavedrawpaste/") #shows raw
 @login_required
-@login_analyst
+@login_read_only
 def showsavedrawpaste():
     requested_path = request.args.get('paste', '')
     paste = Paste.Paste(requested_path)
@@ -407,7 +419,7 @@ def showsavedrawpaste():
 
 @showsavedpastes.route("/showpreviewpaste/")
 @login_required
-@login_analyst
+@login_read_only
 def showpreviewpaste():
     num = request.args.get('num', '')
     requested_path = request.args.get('paste', '')
@@ -416,7 +428,7 @@ def showpreviewpaste():
 
 @showsavedpastes.route("/getmoredata/")
 @login_required
-@login_analyst
+@login_read_only
 def getmoredata():
     requested_path = request.args.get('paste', '')
     paste = Paste.Paste(requested_path)
@@ -444,10 +456,17 @@ def showDiff():
 
 @showsavedpastes.route('/screenshot/<path:filename>')
 @login_required
-@login_analyst
+@login_read_only
 @no_cache
 def screenshot(filename):
     return send_from_directory(SCREENSHOT_FOLDER, filename+'.png', as_attachment=True)
+
+# @showsavedpastes.route('/har/paste/<path:filename>')
+# @login_required
+# @login_read_only
+# def har(filename):
+#     har_file = Item.get_item_har(filename)
+#     return jsonify(har_file)
 
 @showsavedpastes.route('/send_file_to_vt/', methods=['POST'])
 @login_required

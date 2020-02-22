@@ -28,9 +28,9 @@ def update_update_stats():
 def update_domain_by_item(domain_obj, item_id):
     domain_name = domain_obj.get_domain_name()
     # update domain tags
-    for tag in Tag.get_item_tags(item_id):
+    for tag in Tag.get_obj_tag(item_id):
         if tag != 'infoleak:submission="crawler"' and tag != 'infoleak:submission="manual"':
-            Tag.add_domain_tag(tag, domain_name, Item.get_item_date(item_id))
+            Tag.add_tag("domain", tag, domain_name, obj_date=Item.get_item_date(item_id))
 
     # update domain correlation
     item_correlation = Item.get_item_all_correlation(item_id)
@@ -56,7 +56,11 @@ if __name__ == '__main__':
     r_serv_onion = config_loader.get_redis_conn("ARDB_Onion")
     config_loader = None
 
-    nb_elem_to_update = int( r_serv_db.get('update:nb_elem_to_convert') )
+    nb_elem_to_update = r_serv_db.get('update:nb_elem_to_convert')
+    if not nb_elem_to_update:
+        nb_elem_to_update = 0
+    else:
+        nb_elem_to_update = int(nb_elem_to_update)
 
     while True:
         domain = r_serv_onion.spop('domain_update_v2.4')

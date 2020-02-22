@@ -17,8 +17,9 @@ import datetime
 from pubsublogger import publisher
 
 from Helper import Process
-from packages import Paste
 from packages import Item
+
+from lib import Decoded
 
 import re
 import signal
@@ -41,121 +42,38 @@ def binary_decoder(binary_string):
 def base64_decoder(base64_string):
     return base64.b64decode(base64_string)
 
-def decode_string(content, message, date, encoded_list, decoder_name, encoded_min_size):
+def decode_string(content, item_id, item_date, encoded_list, decoder_name, encoded_min_size):
     find = False
     for encoded in encoded_list:
         if len(encoded) >=  encoded_min_size:
-            decode = decoder_function[decoder_name](encoded)
+            decoded_file = decoder_function[decoder_name](encoded)
             find = True
 
-            save_hash(decoder_name, message, date, decode)
+            sha1_string = sha1(decoded_file).hexdigest()
+            mimetype = Decoded.get_file_mimetype(decoded_file)
+            if not mimetype:
+                print(item_id)
+                print(sha1_string)
+                raise Exception('Invalid mimetype')
+            Decoded.save_decoded_file_content(sha1_string, decoded_file, item_date, mimetype=mimetype)
+            Decoded.save_item_relationship(sha1_string, item_id)
+            Decoded.create_decoder_matadata(sha1_string, item_id, decoder_name)
 
-            #remove encoded from paste content
+            #remove encoded from item content
             content = content.replace(encoded, '', 1)
 
+            print('{} : {} - {}'.format(item_id, decoder_name, mimetype))
     if(find):
-        set_out_paste(decoder_name, message)
+        set_out_item(decoder_name, item_id)
 
     return content
 
-# # TODO: FIXME check db
-def save_hash(decoder_name, message, date, decoded):
-    print(decoder_name)
-    type = magic.from_buffer(decoded, mime=True)
-    hash = sha1(decoded).hexdigest()
-    print(hash)
-
-    data = {}
-    data['name'] = hash
-    data['date'] = datetime.datetime.now().strftime("%d/%m/%y")
-    data['origin'] = message
-    data['estimated type'] = type
-    json_data = json.dumps(data)
-
-    date_paste = '{}/{}/{}'.format(date[0:4], date[4:6], date[6:8])
-    date_key = date[0:4] + date[4:6] + date[6:8]
-
-    serv_metadata.incrby(decoder_name+'_decoded:'+date_key, 1)
-    serv_metadata.zincrby('hash_date:'+date_key, hash, 1)
-    serv_metadata.zincrby(decoder_name+'_date:'+date_key, hash, 1)
-
-    # first time we see this hash
-    if not serv_metadata.hexists('metadata_hash:'+hash, 'estimated_type'):
-        serv_metadata.hset('metadata_hash:'+hash, 'first_seen', date_paste)
-        serv_metadata.hset('metadata_hash:'+hash, 'last_seen', date_paste)
-    else:
-        serv_metadata.hset('metadata_hash:'+hash, 'last_seen', date_paste)
-
-    # first time we see this hash (all encoding) on this paste
-    if serv_metadata.zscore('nb_seen_hash:'+hash, message) is None:
-        serv_metadata.hincrby('metadata_hash:'+hash, 'nb_seen_in_all_pastes', 1)
-        serv_metadata.sadd('hash_paste:'+message, hash) # paste - hash map
-        # create hash metadata
-        serv_metadata.hset('metadata_hash:'+hash, 'estimated_type', type)
-        serv_metadata.sadd('hash_all_type', type)
-
-    # first time we see this hash encoding on this paste
-    if serv_metadata.zscore(decoder_name+'_hash:'+hash, message) is None:
-        print('first '+decoder_name)
-
-        serv_metadata.sadd(decoder_name+'_paste:'+message, hash) # paste - hash map
-
-        # create hash metadata
-        serv_metadata.sadd('hash_'+ decoder_name +'_all_type', type)
-
-        # first time we see this hash today
-        #if serv_metadata.zscore('hash_date:'+date_key, hash) is None:
-        #    serv_metadata.zincrby('hash_type:'+type, date_key, 1)
-
-        # first time we see this hash encoding today
-        if serv_metadata.zscore(decoder_name+'_date:'+date_key, hash) is None:
-            serv_metadata.zincrby(decoder_name+'_type:'+type, date_key, 1)
-
-        save_hash_on_disk(decoded, type, hash, json_data)
-        print('found {} '.format(type))
-
-    serv_metadata.hincrby('metadata_hash:'+hash, decoder_name+'_decoder', 1)
-
-    serv_metadata.zincrby(decoder_name+'_type:'+type, date_key, 1)
-
-    serv_metadata.zincrby('nb_seen_hash:'+hash, message, 1)# hash - paste map
-    serv_metadata.zincrby(decoder_name+'_hash:'+hash, message, 1) # number of b64 on this paste
-
-    # Domain Object
-    if Item.is_crawled(message):
-        domain = Item.get_item_domain(message)
-        serv_metadata.sadd('hash_domain:{}'.format(domain), hash) # domain - hash map
-        serv_metadata.sadd('domain_hash:{}'.format(hash), domain) # hash - domain map
-
-
-def save_hash_on_disk(decode, type, hash, json_data):
-
-    local_filename_hash = os.path.join(p.config.get("Directories", "hash"), type, hash[:2], hash)
-    filename_hash = os.path.join(os.environ['AIL_HOME'], local_filename_hash)
-
-    filename_json = os.path.join(os.environ['AIL_HOME'],
-                            p.config.get("Directories", "hash"), type, hash[:2], hash + '.json')
-
-    dirname = os.path.dirname(filename_hash)
-    if not os.path.exists(dirname):
-        os.makedirs(dirname)
-
-    with open(filename_hash, 'wb') as f:
-        f.write(decode)
-
-    # create hash metadata
-    serv_metadata.hset('metadata_hash:'+hash, 'saved_path', local_filename_hash)
-    serv_metadata.hset('metadata_hash:'+hash, 'size', os.path.getsize(filename_hash))
-
-    with open(filename_json, 'w') as f:
-        f.write(json_data)
-
-def set_out_paste(decoder_name, message):
+def set_out_item(decoder_name, item_id):
     publisher.warning(decoder_name+' decoded')
     #Send to duplicate
-    p.populate_set_out(message, 'Duplicate')
+    p.populate_set_out(item_id, 'Duplicate')
 
-    msg = 'infoleak:automatic-detection="'+decoder_name+'";{}'.format(message)
+    msg = 'infoleak:automatic-detection="'+decoder_name+'";{}'.format(item_id)
     p.populate_set_out(msg, 'Tags')
 
 
@@ -217,12 +135,11 @@ if __name__ == '__main__':
             time.sleep(1)
             continue
 
-        filename = message
-        paste = Paste.Paste(filename)
+        obj_id = Item.get_item_id(message)
 
         # Do something with the message from the queue
-        content = paste.get_p_content()
-        date = str(paste._get_p_date())
+        content = Item.get_item_content(obj_id)
+        date = Item.get_item_date(obj_id)
 
         for decoder in decoder_order: # add threshold and size limit
 
@@ -233,7 +150,7 @@ if __name__ == '__main__':
             except TimeoutException:
                 encoded_list = []
                 p.incr_module_timeout_statistic() # add encoder type
-                print ("{0} processing timeout".format(paste.p_rel_path))
+                print ("{0} processing timeout".format(obj_id))
                 continue
             else:
                 signal.alarm(0)

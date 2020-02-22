@@ -23,6 +23,7 @@ Redis and ARDB overview
      DB 7 - Metadata
      DB 8 - Statistics
      DB 9 - Crawler
+     DB 10 - Objects
 
 * ARDB on TCP port <year>
     - DB 0 - Lines duplicate
@@ -97,11 +98,23 @@ Redis and ARDB overview
 | ------ | ------ | ------ |
 | ail:all_role | **role** | **int, role priority (1=admin)** |
 
+##### MISP Modules:
+
+| Set Key | Value |
+| ------ | ------ |
+| enabled_misp_modules | **module name** |
+
+| Key | Value |
+| ------ | ------ |
+| misp_module:**module name** | **module dict** |
+
 ##### Item Import:
 | Key | Value |
 | ------ | ------ |
 | **uuid**:isfile   | **boolean** |
 | **uuid**:paste_content | **item_content** |
+
+## DB2 - TermFreq:
 
 | Set Key | Value |
 | ------ | ------ |
@@ -186,8 +199,6 @@ Redis and ARDB overview
 ##### Hset:
 | Key | Field | Value |
 | ------ | ------ | ------ |
-| per_paste_**epoch** | **term** | **nb_seen** |
-| | |
 | tag_metadata:**tag** | first_seen | **date** |
 | tag_metadata:**tag** | last_seen | **date** |
 
@@ -195,13 +206,20 @@ Redis and ARDB overview
 | Key | Value |
 | ------ | ------ |
 | list_tags | **tag** |
+| list_tags:**object_type** | **tag** |
+| list_tags:domain | **tag** |
+||
 | active_taxonomies | **taxonomie** |
 | active_galaxies | **galaxie** |
 | active_tag_**taxonomie or galaxy** | **tag** |
 | synonym_tag_misp-galaxy:**galaxy** | **tag synonym** |
 | list_export_tags | **user_tag** |
+||
 | **tag**:**date** | **paste** |
-
+| **object_type**:**tag** | **object_id** |
+||
+| DB7 |
+| tag:**object_id** | **tag** |
 
 ##### old:
 | Key | Value |

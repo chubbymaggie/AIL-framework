@@ -28,6 +28,9 @@ sender = sender@example.com
 sender_host = smtp.example.com
 sender_port = 1337
 sender_pw = None
+# Only needed when the credentials for email server needs a username instead of an email address
+#sender_user = sender
+sender_user =
 
 # optional for using with authenticated SMTP over SSL
 # sender_pw = securepassword
@@ -36,6 +39,8 @@ sender_pw = None
 [Flask]
 #Proxying requests to the app
 baseUrl = /
+#Flask server port
+port = 7000
 #Number of logs to display in the dashboard
 max_dashboard_logs = 15
 #Maximum number of character to display in the toolip
@@ -208,6 +213,11 @@ db = 8
 host = localhost
 port = 6382
 db = 9
+
+[ARDB_Objects]
+host = localhost
+port = 6382
+db = 10
 
 [Url]
 cc_critical = DE

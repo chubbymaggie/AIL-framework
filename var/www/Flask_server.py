@@ -18,7 +18,13 @@ from flask_login import LoginManager, current_user, login_user, logout_user, log
 import flask
 import importlib
 from os.path import join
+
+# # TODO: put me in lib/Tag
+from pytaxonomies import Taxonomies
+
 sys.path.append(os.path.join(os.environ['AIL_BIN'], 'packages/'))
+import Tag
+
 sys.path.append('./modules/')
 
 from User import User
@@ -26,15 +32,16 @@ from User import User
 sys.path.append(os.path.join(os.environ['AIL_BIN'], 'lib/'))
 import ConfigLoader
 
-
-from pytaxonomies import Taxonomies
-
 # Import config
 import Flask_config
 
 # Import Blueprint
 from blueprints.root import root
 from blueprints.crawler_splash import crawler_splash
+from blueprints.correlation import correlation
+from blueprints.tags_ui import tags_ui
+from blueprints.import_export import import_export
+
 
 Flask_dir = os.environ['AIL_FLASK']
 
@@ -44,6 +51,11 @@ baseUrl = config_loader.get_config_str("Flask", "baseurl")
 baseUrl = baseUrl.replace('/', '')
 if baseUrl != '':
     baseUrl = '/'+baseUrl
+
+try:
+    FLASK_PORT = config_loader.get_config_int("Flask", "port")
+except Exception:
+    FLASK_PORT = 7000
 
 # ========= REDIS =========#
 r_serv_db = config_loader.get_redis_conn("ARDB_DB")
@@ -80,7 +92,13 @@ app.config['MAX_CONTENT_LENGTH'] = 900 * 1024 * 1024
 # =========  BLUEPRINT  =========#
 app.register_blueprint(root, url_prefix=baseUrl)
 app.register_blueprint(crawler_splash, url_prefix=baseUrl)
+app.register_blueprint(correlation, url_prefix=baseUrl)
+app.register_blueprint(tags_ui, url_prefix=baseUrl)
+app.register_blueprint(import_export, url_prefix=baseUrl)
 # =========       =========#
+
+# ========= Cookie name ========
+app.config.update(SESSION_COOKIE_NAME='ail_framework_{}'.format(FLASK_PORT))
 
 # ========= session ========
 app.secret_key = str(random.getrandbits(256))
@@ -215,20 +233,15 @@ def page_not_found(e):
     return render_template('error/404.html'), 404
 
 # ========== INITIAL taxonomies ============
-# add default ail taxonomies
-r_serv_tags.sadd('active_taxonomies', 'infoleak')
-r_serv_tags.sadd('active_taxonomies', 'gdpr')
-r_serv_tags.sadd('active_taxonomies', 'fpf')
-# add default tags
-taxonomies = Taxonomies()
-for tag in taxonomies.get('infoleak').machinetags():
-    r_serv_tags.sadd('active_tag_infoleak', tag)
-for tag in taxonomies.get('gdpr').machinetags():
-    r_serv_tags.sadd('active_tag_gdpr', tag)
-for tag in taxonomies.get('fpf').machinetags():
-    r_serv_tags.sadd('active_tag_fpf', tag)
+default_taxonomies = ["infoleak", "gdpr", "fpf", "dark-web"]
+
+# enable default taxonomies
+for taxo in default_taxonomies:
+    Tag.enable_taxonomy(taxo)
 
 # ========== INITIAL tags auto export ============
+taxonomies = Taxonomies()
+
 infoleak_tags = taxonomies.get('infoleak').machinetags()
 infoleak_automatic_tags = []
 for tag in taxonomies.get('infoleak').machinetags():
@@ -239,4 +252,4 @@ r_serv_db.sadd('list_export_tags', 'infoleak:submission="manual"')
 # ============ MAIN ============
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=7000, threaded=True, ssl_context=ssl_context)
+    app.run(host='0.0.0.0', port=FLASK_PORT, threaded=True, ssl_context=ssl_context)

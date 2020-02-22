@@ -68,9 +68,11 @@ class TorSplashCrawler():
             self.date_month = date['date_month']
             self.date_epoch = int(date['epoch'])
 
+            # # TODO: timeout in config
             self.arg_crawler = {  'html': crawler_options['html'],
                                   'wait': 10,
                                   'render_all': 1,
+                                  'timeout': 30,
                                   'har': crawler_options['har'],
                                   'png': crawler_options['png']}
 
@@ -199,6 +201,9 @@ class TorSplashCrawler():
                             self.r_serv_metadata.hset('paste_metadata:{}'.format(relative_filename_paste), 'screenshot', hash)
                             # add sha256 metadata
                             self.r_serv_onion.sadd('screenshot:{}'.format(hash), relative_filename_paste)
+                            # domain map
+                            self.r_serv_onion.sadd('domain_screenshot:{}'.format(self.domains[0]), hash)
+                            self.r_serv_onion.sadd('screenshot_domain:{}'.format(hash), self.domains[0])
 
                     if 'har' in response.data:
                         dirname = os.path.dirname(filename_har)

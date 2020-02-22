@@ -199,82 +199,9 @@
         </table>
 
         <div>
-          {% if misp %}
-          <button class="btn btn-default btn-lg" data-toggle="modal" data-target="#myModal_MISP">
-            Create
-            <img id="misp-logo" src="{{url_for('static', filename='image/misp-logo.png') }}" height="32">
-            Event
-          </button>
-          <!-- Modal MISP-->
-          <div class="modal fade" id="myModal_MISP" role="dialog">
-            <div class="modal-dialog">
-
-              <div class="modal-content">
-                <div class="modal-header text-center">
-                  <img id="misp-logo" src="{{url_for('static', filename='image/misp-logo.png') }}" >
-                </div>
-                <div class="modal-body">
-
-                  <form method="post" action="{{ url_for('PasteSubmit.create_misp_event') }}" target="_blank">
-
-                  <div class="input select required">
-                    <label for="EventDistribution">Distribution</label>
-                    <select name="misp_data[Event][distribution]" id="EventDistribution" required="required">
-                      <option value="0" selected="selected">Your organisation only</option>
-                      <option value="1">This community only</option>
-                      <option value="2">Connected communities</option>
-                      <option value="3">All communities</option>
-                    </select>
-                  </div>
-                  <div class="input clear required">
-                    <label for="EventThreatLevelId">Threat Level</label>
-                    <select name="misp_data[Event][threat_level_id]" id="EventThreatLevelId" required="required">
-                      <option value="1">High</option>
-                      <option value="2" selected="selected">Medium</option>
-                      <option value="3">Low</option>
-                      <option value="4">Undefined</option>
-                    </select>
-                  </div>
-                  <div class="input select required">
-                    <label for="EventAnalysis">Analysis</label>
-                    <select name="misp_data[Event][analysis]" id="EventAnalysis" required="required">
-                      <option value="0">Initial</option>
-                      <option value="1">Ongoing</option>
-                      <option value="2">Completed</option>
-                    </select>
-                  </div>
-                  <div class="clear required">
-                    <label for="EventInfo">Event Info</label>
-                    <input name="misp_data[Event][info]" class="form-control span6" placeholder="Quick Event Description or Tracking Info" type="text" id="EventInfo" required="required"/>
-                  </div>
-                  <div class="clear">
-                    <label for="EventInfo">Publish Event</label>
-                    <input type="checkbox" value="True" id="misp_publish" name="misp_publish" >
-                  </div>
-                  <input type="hidden" id="paste" name="paste" value="{{ request.args.get('paste') }}">
-
-                  {% if misp_eventid %}
-                  <br>
-                  <div class="list-group" id="misp_event">
-                    <li class="list-group-item active">MISP Events already Created</li>
-                      <a target="_blank" href="{{ misp_url }}" class="list-group-item">{{ misp_url }}</a></div>
-                  {% endif %}
-
-                </div>
-                <div class="modal-footer center">
-                  <button class="btn btn-primary">
-                    <span class="glyphicon glyphicon-ok "></span> Create Event
-                  </button>
-
-                </form>
-                  <button type="button" class="btn btn-default" data-dismiss="modal" >Close</button>
-
-                </div>
-              </div>
-
-            </div>
-          </div>
-          {% endif %}
+          {% with obj_type='item', obj_id=request.args.get('paste'), obj_lvl=0%}
+            {% include 'import_export/block_add_user_object_to_export.html' %}
+          {% endwith %}
 
           {% if hive %}
           <button class="btn btn-primary btn-lg" data-toggle="modal" data-target="#myModal_hive">
@@ -346,6 +273,13 @@
           {% endif %}
         </div>
 
+        <div>
+					<a href="{{ url_for('correlation.show_correlation')}}?object_type=paste&correlation_id={{ request.args.get('paste') }}&correlation_objects=paste" target="_blank" style="font-size: 15px">
+						<button class="btn btn-info"><i class="fa fa-search"></i> Show Paste Correlation
+						</button>
+					</a>
+				</div>
+
       </div>
 
     <div class="panel-body" id="panel-body">
@@ -393,7 +327,7 @@
           {% for b64 in l_64 %}
               <tr>
                   <td><i class="fa {{ b64[0] }}"></i>&nbsp;&nbsp;{{ b64[1] }}</td>
-                  <td><a target="_blank" href="{{ url_for('hashDecoded.showHash') }}?hash={{ b64[2] }}">{{ b64[2] }}</a> ({{ b64[4] }})</td>
+                  <td><a target="_blank" href="{{ url_for('correlation.show_correlation') }}?object_type=decoded&correlation_id={{ b64[2] }}&correlation_objects=paste">{{ b64[2] }}</a> ({{ b64[4] }})</td>
                   <td>{{ b64[3] }}</td>
                   <td style="text-align:center;">
                     {% if  vt_enabled %}
@@ -445,6 +379,10 @@
                           </tr>
                         </tbody>
                       </table>
+
+                      {% if crawler_metadata['har_file'] %}
+                        button
+                      {% endif %}
                 </div>
               </div>
             </div>
@@ -454,10 +392,10 @@
                 <div class="panel-heading">
                     <div class="row">
                       <div class="col-md-8">
-                        <input class="center" id="blocks" type="range" min="1" max="50" value="13">
+                        <input class="center" id="blocks" type="range" min="1" max="50" value="{%if tags_safe%}13{%else%}0{%endif%}">
                       </div>
                       <div class="col-md-4">
-                        <button class="btn btn-primary btn-tags" onclick="blocks.value=50;pixelate();">
+                        <button class="btn {%if tags_safe%}btn-primary{%else%}btn-danger{%endif%} btn-tags" onclick="blocks.value=50;pixelate();">
                             <span class="glyphicon glyphicon-zoom-in"></span>
                             <span class="label-icon">Full resolution</span>
                         </button>
@@ -559,7 +497,7 @@
       var tags = ltags.getValue()
       var tagsgalaxy = ltagsgalaxies.getValue()
       var path = '{{ request.args.get('paste') }}'
-      window.location.replace("{{ url_for('Tags.addTags') }}?tags=" + tags + "&tagsgalaxies=" + tagsgalaxy + "&path=" + path);
+      window.location.replace("{{ url_for('tags_ui.add_tags') }}?tags=" + tags + "&tagsgalaxies=" + tagsgalaxy + "&object_id=" + path + "&object_type=item");
     }
 
 </script>

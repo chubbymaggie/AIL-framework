@@ -22,6 +22,7 @@ if __name__ == "__main__":
     config_loader = ConfigLoader.ConfigLoader()
 
     r_serv = config_loader.get_redis_conn("ARDB_DB")
+    r_serv_onion = config_loader.get_redis_conn("ARDB_Onion")
     config_loader = None
 
     if r_serv.scard('ail:update_v1.5') != 5:
@@ -64,7 +65,7 @@ if __name__ == "__main__":
         process = subprocess.run(['python' ,update_file])
 
 
-        if int(r_serv.get('ail:current_background_script_stat')) != 100:
+        if int(r_serv_onion.scard('domain_update_v2.4')) != 0:
             r_serv.set('ail:update_error', 'Update v2.4 Failed, please relaunch the bin/update-background.py script')
         else:
             r_serv.delete('ail:update_in_progress')
@@ -73,3 +74,43 @@ if __name__ == "__main__":
             r_serv.delete('ail:current_background_update')
             r_serv.delete('update:nb_elem_to_convert')
             r_serv.delete('update:nb_elem_converted')
+
+    if r_serv.sismember('ail:to_update', 'v2.6'):
+        new_version = 'v2.6'
+        r_serv.delete('ail:update_error')
+        r_serv.delete('ail:current_background_script_stat')
+        r_serv.set('ail:update_in_progress', new_version)
+        r_serv.set('ail:current_background_update', new_version)
+        r_serv.set('ail:current_background_script', 'screenshot update')
+
+        update_file = os.path.join(os.environ['AIL_HOME'], 'update', new_version, 'Update_screenshots.py')
+        process = subprocess.run(['python' ,update_file])
+
+        update_progress = r_serv.get('ail:current_background_script_stat')
+        if update_progress:
+            if int(update_progress) == 100:
+                r_serv.delete('ail:update_in_progress')
+                r_serv.delete('ail:current_background_script')
+                r_serv.delete('ail:current_background_script_stat')
+                r_serv.delete('ail:current_background_update')
+                r_serv.srem('ail:to_update', new_version)
+
+    elif r_serv.sismember('ail:to_update', 'v2.7'):
+        new_version = 'v2.7'
+        r_serv.delete('ail:update_error')
+        r_serv.delete('ail:current_background_script_stat')
+        r_serv.set('ail:update_in_progress', new_version)
+        r_serv.set('ail:current_background_update', new_version)
+        r_serv.set('ail:current_background_script', 'domain tags update')
+
+        update_file = os.path.join(os.environ['AIL_HOME'], 'update', new_version, 'Update_domain_tags.py')
+        process = subprocess.run(['python' ,update_file])
+
+        update_progress = r_serv.get('ail:current_background_script_stat')
+        if update_progress:
+            if int(update_progress) == 100:
+                r_serv.delete('ail:update_in_progress')
+                r_serv.delete('ail:current_background_script')
+                r_serv.delete('ail:current_background_script_stat')
+                r_serv.delete('ail:current_background_update')
+                r_serv.srem('ail:to_update', new_version)

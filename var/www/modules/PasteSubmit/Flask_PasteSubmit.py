@@ -45,7 +45,6 @@ import Flask_config
 
 app = Flask_config.app
 baseUrl = Flask_config.baseUrl
-r_serv_tags = Flask_config.r_serv_tags
 r_serv_metadata = Flask_config.r_serv_metadata
 r_serv_db = Flask_config.r_serv_db
 r_serv_log_submit = Flask_config.r_serv_log_submit
@@ -258,13 +257,10 @@ def submit():
 
     if ltags or ltagsgalaxies:
 
-        ltags = ltags.split(',')
-        ltagsgalaxies = ltagsgalaxies.split(',')
+        ltags = Tag.unpack_str_tags_list(ltags)
+        ltagsgalaxies = Tag.unpack_str_tags_list(ltagsgalaxies)
 
-        print(ltags)
-        print(ltagsgalaxies)
-
-        if not Tags.is_valid_tags_taxonomies_galaxy(ltags, ltagsgalaxies):
+        if not Tag.is_valid_tags_taxonomies_galaxy(ltags, ltagsgalaxies):
             content = 'INVALID TAGS'
             print(content)
             return content, 400

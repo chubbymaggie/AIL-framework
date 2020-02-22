@@ -13,6 +13,9 @@ import json
 import redis
 import datetime
 
+sys.path.append(os.path.join(os.environ['AIL_BIN'], 'lib/'))
+import Domain
+
 import Import_helper
 import Cryptocurrency
 import Pgp
@@ -134,6 +137,15 @@ def authErrors(user_role):
 
 # ============ API CORE =============
 
+def create_json_response(data_dict, response_code):
+    return Response(json.dumps(data_dict, indent=2, sort_keys=True), mimetype='application/json'), int(response_code)
+
+def get_mandatory_fields(json_data, required_fields):
+    for field in required_fields:
+        if field not in json_data:
+            return {'status': 'error', 'reason': 'mandatory field: {} not provided'.format(field)}, 400
+    return None
+
 # ============ FUNCTIONS ============
 
 def is_valid_uuid_v4(header_uuid):
@@ -172,14 +184,14 @@ def one():
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 @restApi.route("api/v1/get/item", methods=['POST'])
-@token_required('analyst')
+@token_required('user')
 def get_item_id():
     data = request.get_json()
     res = Item.get_item(data)
     return Response(json.dumps(res[0], indent=2, sort_keys=True), mimetype='application/json'), res[1]
 
 @restApi.route("api/v1/get/item/default", methods=['POST'])
-@token_required('analyst')
+@token_required('user')
 def get_item_id_basic():
 
     data = request.get_json()
@@ -202,7 +214,7 @@ def get_item_id_basic():
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 @restApi.route("api/v1/get/item/tag", methods=['POST'])
-@token_required('analyst')
+@token_required('user')
 def get_item_tag():
 
     data = request.get_json()
@@ -234,11 +246,11 @@ def add_item_tags():
     if not data:
         return Response(json.dumps({'status': 'error', 'reason': 'Malformed JSON'}, indent=2, sort_keys=True), mimetype='application/json'), 400
 
-    item_id = data.get('id', None)
+    object_id = data.get('id', None)
     tags = data.get('tags', [])
     galaxy = data.get('galaxy', [])
 
-    res = Tag.add_items_tag(tags, galaxy, item_id)
+    res = Tag.api_add_obj_tags(tags=tags, galaxy_tags=galaxy, object_id=object_id, object_type="item")
     return Response(json.dumps(res[0], indent=2, sort_keys=True), mimetype='application/json'), res[1]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -263,10 +275,10 @@ def delete_item_tags():
     if not data:
         return Response(json.dumps({'status': 'error', 'reason': 'Malformed JSON'}, indent=2, sort_keys=True), mimetype='application/json'), 400
 
-    item_id = data.get('id', None)
+    object_id = data.get('id', None)
     tags = data.get('tags', [])
 
-    res = Tag.remove_item_tags(tags, item_id)
+    res = Tag.api_delete_obj_tags(tags=tags, object_id=object_id, object_type="item")
     return Response(json.dumps(res[0], indent=2, sort_keys=True), mimetype='application/json'), res[1]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -283,7 +295,7 @@ def delete_item_tags():
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 @restApi.route("api/v1/get/item/content", methods=['POST'])
-@token_required('analyst')
+@token_required('user')
 def get_item_content():
 
     data = request.get_json()
@@ -298,7 +310,7 @@ def get_item_content():
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 @restApi.route("api/v1/get/tag/metadata", methods=['POST'])
-@token_required('analyst')
+@token_required('user')
 def get_tag_metadata():
     data = request.get_json()
     tag = data.get('tag', None)
@@ -308,7 +320,7 @@ def get_tag_metadata():
     return Response(json.dumps(metadata, indent=2, sort_keys=True), mimetype='application/json'), 200
 
 @restApi.route("api/v1/get/tag/all", methods=['GET'])
-@token_required('analyst')
+@token_required('user')
 def get_all_tags():
     res = {'tags': Tag.get_all_tags()}
     return Response(json.dumps(res, indent=2, sort_keys=True), mimetype='application/json'), 200
@@ -335,7 +347,7 @@ def delete_tracker_term():
     return Response(json.dumps(res[0], indent=2, sort_keys=True), mimetype='application/json'), res[1]
 
 @restApi.route("api/v1/get/tracker/item", methods=['POST'])
-@token_required('analyst')
+@token_required('user')
 def get_tracker_term_item():
     data = request.get_json()
     user_token = get_auth_from_header()
@@ -348,7 +360,7 @@ def get_tracker_term_item():
 # # # # # # # # # # # #        CRYPTOCURRENCY       # # # # # # # # # # # # # #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 @restApi.route("api/v1/get/cryptocurrency/bitcoin/metadata", methods=['POST'])
-@token_required('analyst')
+@token_required('user')
 def get_cryptocurrency_bitcoin_metadata():
     data = request.get_json()
     crypto_address = data.get('bitcoin', None)
@@ -357,7 +369,7 @@ def get_cryptocurrency_bitcoin_metadata():
     return Response(json.dumps(res[0], indent=2, sort_keys=True), mimetype='application/json'), res[1]
 
 @restApi.route("api/v1/get/cryptocurrency/bitcoin/item", methods=['POST'])
-@token_required('analyst')
+@token_required('user')
 def get_cryptocurrency_bitcoin_item():
     data = request.get_json()
     bitcoin_address = data.get('bitcoin', None)
@@ -369,7 +381,7 @@ def get_cryptocurrency_bitcoin_item():
 # # # # # # # # # # # # # # #       PGP       # # # # # # # # # # # # # # # # #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 @restApi.route("api/v1/get/pgp/key/metadata", methods=['POST'])
-@token_required('analyst')
+@token_required('user')
 def get_pgp_key_metadata():
     data = request.get_json()
     pgp_field = data.get('key', None)
@@ -378,7 +390,7 @@ def get_pgp_key_metadata():
     return Response(json.dumps(res[0], indent=2, sort_keys=True), mimetype='application/json'), res[1]
 
 @restApi.route("api/v1/get/pgp/mail/metadata", methods=['POST'])
-@token_required('analyst')
+@token_required('user')
 def get_pgp_mail_metadata():
     data = request.get_json()
     pgp_field = data.get('mail', None)
@@ -387,7 +399,7 @@ def get_pgp_mail_metadata():
     return Response(json.dumps(res[0], indent=2, sort_keys=True), mimetype='application/json'), res[1]
 
 @restApi.route("api/v1/get/pgp/name/metadata", methods=['POST'])
-@token_required('analyst')
+@token_required('user')
 def get_pgp_name_metadata():
     data = request.get_json()
     pgp_field = data.get('name', None)
@@ -396,7 +408,7 @@ def get_pgp_name_metadata():
     return Response(json.dumps(res[0], indent=2, sort_keys=True), mimetype='application/json'), res[1]
 
 @restApi.route("api/v1/get/pgp/key/item", methods=['POST'])
-@token_required('analyst')
+@token_required('user')
 def get_pgp_key_item():
     data = request.get_json()
     pgp_field = data.get('key', None)
@@ -405,7 +417,7 @@ def get_pgp_key_item():
     return Response(json.dumps(res[0], indent=2, sort_keys=True), mimetype='application/json'), res[1]
 
 @restApi.route("api/v1/get/pgp/mail/item", methods=['POST'])
-@token_required('analyst')
+@token_required('user')
 def get_pgp_mail_item():
     data = request.get_json()
     pgp_mail = data.get('mail', None)
@@ -414,7 +426,7 @@ def get_pgp_mail_item():
     return Response(json.dumps(res[0], indent=2, sort_keys=True), mimetype='application/json'), res[1]
 
 @restApi.route("api/v1/get/pgp/name/item", methods=['POST'])
-@token_required('analyst')
+@token_required('user')
 def get_pgp_name_item():
     data = request.get_json()
     pgp_name = data.get('name', None)
@@ -453,6 +465,42 @@ def get_item_cryptocurrency_bitcoin():
     res = Item.get_item(req_data)
     return Response(json.dumps(res[0], indent=2, sort_keys=True), mimetype='application/json'), res[1]
 '''
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # #        DOMAIN       # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+@restApi.route("api/v1/get/domain/status/minimal", methods=['POST'])
+@token_required('analyst')
+def get_domain_status_minimal():
+    data = request.get_json()
+    domain = data.get('domain', None)
+    # error handler
+    res = Domain.api_verify_if_domain_exist(domain)
+    if res:
+        return create_json_response(res[0], res[1])
+    res = Domain.api_get_domain_up_range(domain)
+    res[0]['domain'] = domain
+    return create_json_response(res[0], res[1])
+
+@restApi.route("api/v1/get/crawled/domain/list", methods=['POST'])
+@token_required('analyst')
+def get_crawled_domain_list():
+    data = request.get_json()
+    res = get_mandatory_fields(data, ['date_from', 'date_to'])
+    if res:
+        return create_json_response(res[0], res[1])
+
+    date_from = data.get('date_from', None)
+    date_to = data.get('date_to', None)
+    domain_type = data.get('domain_type', None)
+    domain_status = 'UP'
+    res = Domain.api_get_domains_by_status_daterange(date_from, date_to, domain_type)
+    dict_res = res[0]
+    dict_res['date_from'] = date_from
+    dict_res['date_to'] = date_to
+    dict_res['domain_status'] = domain_status
+    dict_res['domain_type'] = domain_type
+    return create_json_response(dict_res, res[1])
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # # # # # # # # # # # # #        IMPORT     # # # # # # # # # # # # # # # # # #

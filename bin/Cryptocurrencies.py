@@ -26,8 +26,8 @@ import redis
 import signal
 
 sys.path.append(os.path.join(os.environ['AIL_BIN'], 'packages'))
-import Cryptocurrency
 import Item
+import Cryptocurrency
 
 
 class TimeoutException(Exception):
@@ -66,7 +66,7 @@ def search_crytocurrency(item_id, item_content):
                     is_valid_crypto_addr = True
                     print('{} address found : {}'.format(crypto_name, address))
                     # build bitcoin correlation
-                    Cryptocurrency.save_cryptocurrency_data(crypto_name, Item.get_item_date(item_id), item_id, address)
+                    Cryptocurrency.cryptocurrency.save_item_correlation(crypto_name, address, item_id, Item.get_item_date(item_id))
 
             # At least one valid cryptocurrency address was found
             if(is_valid_crypto_addr):
